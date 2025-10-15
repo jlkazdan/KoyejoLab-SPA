@@ -1,0 +1,124 @@
+program: scripts/spa_experiment.py
+command:
+  - ${env}
+  - python3  # Use python3 instead of default python
+  - ${program}
+  - ${args}
+project: spa-experiments
+entity: jkazdan
+method: grid
+
+metric:
+  name: spa_accuracy
+  goal: maximize
+
+parameters:
+  # ============================================================================
+  # CRITICAL: Backend Configuration - MUST be set correctly
+  # ============================================================================
+  backend:
+    value: 'bedrock'  # FIXED VALUE - not 'values' array
+  
+  # Python executable (optional - defaults to sys.executable)
+  # Uncomment if you need to specify a different Python
+  # python_executable:
+  #   value: '/usr/bin/python3'  # or 'python' or full path
+  
+  # ============================================================================
+  # vLLM Server Configuration (IGNORED when backend='bedrock')
+  # ============================================================================
+  auto_start_vllm:
+    value: false
+  
+  vllm_server_url:
+    value: 'http://localhost:8000'
+  
+  vllm_port:
+    value: 8000
+  
+  vllm_max_model_len:
+    value: 4096
+  
+  vllm_gpu_memory_util:
+    value: 0.9
+  
+  # Set to null for Bedrock (will be ignored anyway)
+  vllm_tensor_parallel_size:
+    value: 1  # Doesn't matter for Bedrock, but set to valid value to avoid issues
+  
+  vllm_dtype:
+    value: 'auto'
+  
+  vllm_quantization:
+    value: 'null'
+  
+  vllm_enable_prefix_caching:
+    value: false
+  
+  # ============================================================================
+  # Dataset Configuration
+  # ============================================================================
+  dataset_name:
+    values:
+      - 'kyssen/predict-the-futurebench-cutoff-June25'
+      - 'cais/hle'
+      - 'google/boolq'
+  
+  # ============================================================================
+  # Model Selection - Bedrock Models Only
+  # ============================================================================
+  model_id:
+    values:
+      - 'qwen.qwen3-235b-a22b-2507-v1:0'
+      # Add more Bedrock models here:
+      # - 'openai.gpt-oss-20b-1:0'
+      # - 'openai.gpt-oss-120b-1:0'
+  
+  # ============================================================================
+  # Experiment Configuration
+  # ============================================================================
+  experiment_type:
+    values:
+      - 'surprisingly_popular'
+      - 'confidence_weighted'
+  
+  num_samples:
+    values: [25]
+  
+  max_questions:
+    values: [100]
+  
+  # ============================================================================
+  # Rate Limiting (Bedrock specific)
+  # ============================================================================
+  max_concurrent_requests:
+    value: 20
+  
+  max_retries:
+    value: 5
+  
+  thread_pool_workers:
+    value: 5  # Used for Bedrock backend threading
+  
+  backoff_base:
+    value: 2
+  
+  backoff_jitter_max:
+    value: 1.0
+  
+  # ============================================================================
+  # Model Inference Configuration
+  # ============================================================================
+  temperature:
+    values: [0.7, 1.0]
+  
+  max_tokens:
+    value: 1000
+  
+  verbose_logging:
+    value: false
+
+# Optional: Early termination
+early_terminate:
+  type: hyperband
+  min_iter: 10
