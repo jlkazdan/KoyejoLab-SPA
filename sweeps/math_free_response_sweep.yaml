@@ -1,19 +1,28 @@
 program: scripts/self_consistency_experiment.py
 method: grid
 metric:
-  name: samples   # we log a Table; use this just to satisfy schema
+  name: samples     # placeholder metric (we log a Table)
   goal: maximize
+
 parameters:
   model:
     values:
-      - meta-llama/Meta-Llama-3-8B-Instruct
-      - Qwen/Qwen2.5-Math-7B-Instruct
+      # - openai/gpt-oss-20b
+      # - openai/gpt-oss-120b
+      - Qwen/Qwen3-32B
+      # - meta-llama/Llama-4-Scout-17B-16E-Instruct
+
   datasets:
-    value: "svamp,gsm8k,math"
+    values:
+      - "aime"
+      - "math"
+      - "svamp"
+      - "gsm8k"
+
   split:
     value: test
   max_samples:
-    value: 1000
+    value: 10
 
   # FIXED: 200 samples per problem
   k:
@@ -24,19 +33,19 @@ parameters:
   top_p:
     value: 0.95
   max_new_tokens:
-    value: 256
+    value: 1500
   seed:
     value: 0
   dtype:
-    value: float32
+    value: half
 
-  # vLLM knobs (if your script uses them)
+  # vLLM knobs
   tensor_parallel_size:
     value: 1
   max_model_len:
     value: 4096
   gpu_memory_utilization:
-    value: 0.90
+    value: 0.95
 
   system:
     value: "You are a careful math assistant. Solve the problem and output ONLY the final answer wrapped in \\boxed{...}."
