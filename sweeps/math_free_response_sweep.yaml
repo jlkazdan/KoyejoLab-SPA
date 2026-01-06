@@ -1,30 +1,25 @@
 program: scripts/self_consistency_experiment.py
 method: grid
 metric:
-  name: samples     # placeholder metric (we log a Table)
+  name: samples
   goal: maximize
 
 parameters:
   model:
     values:
-      # - openai/gpt-oss-20b
-      # - openai/gpt-oss-120b
       - Qwen/Qwen3-32B
-      # - meta-llama/Llama-4-Scout-17B-16E-Instruct
 
   datasets:
     values:
-      - "aime"
       - "math"
-      - "svamp"
-      - "gsm8k"
+      - "aime"
 
   split:
     value: test
   max_samples:
-    value: 10
+    value: 128
 
-  # FIXED: 200 samples per problem
+  # 200 samples per problem
   k:
     value: 200
 
@@ -39,7 +34,6 @@ parameters:
   dtype:
     value: half
 
-  # vLLM knobs
   tensor_parallel_size:
     value: 1
   max_model_len:
@@ -48,4 +42,4 @@ parameters:
     value: 0.95
 
   system:
-    value: "You are a careful math assistant. Solve the problem and output ONLY the final answer wrapped in \\boxed{...}."
+    value: "You are a careful math assistant. Solve the problem and, after giving your solution, output ONLY the final answer wrapped in \\boxed{...}."
