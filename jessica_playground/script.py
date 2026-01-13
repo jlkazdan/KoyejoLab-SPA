@@ -1,7 +1,11 @@
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,3,5"
-os.environ["HF_DATASETS_CACHE"] = "/lfs/skampere2/0/jchud/hf_cache/datasets"
-
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+n_threads_str = "4"
+os.environ["OMP_NUM_THREADS"] = n_threads_str
+os.environ["OPENBLAS_NUM_THREADS"] = n_threads_str
+os.environ["MKL_NUM_THREADS"] = n_threads_str
+os.environ["VECLIB_MAXIMUM_THREADS"] = n_threads_str
+os.environ["NUMEXPR_NUM_THREADS"] = n_threads_str
 
 
 # scripts/self_consistency_experiment.py
@@ -44,7 +48,6 @@ def expand_datasets(datasets_field):
 
 
 def load_items_for_dataset(cfg, name: str):
-    print(f"This is the dataset {name}")
     seed, n = int(cfg.seed), int(cfg.max_samples)
 
     if name == "gsm8k":
@@ -71,8 +74,7 @@ def load_items_for_dataset(cfg, name: str):
                 for i, ex in enumerate(d)]
 
     if name == "aime":
-        # NOTE: aime only has a train split; hard code to train
-        d = load_dataset("gneubig/aime-1983-2024", split="train")
+        d = load_dataset("gneubig/aime-1983-2024", split=str(cfg.split))
         d = d.shuffle(seed=seed).select(range(min(n, len(d))))
         return [(name, i, ex["Question"], str(ex["Answer"]).strip())
                 for i, ex in enumerate(d)]
@@ -108,20 +110,19 @@ def run_one_dataset(llm: LLM, tok, cfg, ds: str):
 
 
 def main():
-
     defaults = dict(
         model="Qwen/Qwen3-32B",
         datasets=["math", "aime"],
         split="test",
-        max_samples=128,
+        max_samples=10,
         k=200,
         temperature=0.7,
         top_p=0.95,
-        max_new_tokens=31000,
+        max_new_tokens=1500,
         seed=0,
         dtype="half",
-        tensor_parallel_size=4,
-        max_model_len=32768, # 4096, 
+        tensor_parallel_size=1,
+        max_model_len=4096,
         gpu_memory_utilization=0.95,
         system=SYS_DEFAULT,
     )
@@ -139,15 +140,15 @@ def main():
         gpu_memory_utilization=float(cfg.gpu_memory_utilization),
     )
 
-    first = True
-    for ds in expand_datasets(cfg.datasets):
-        table = run_one_dataset(llm, tok, cfg, ds)
-        wandb.log({f"samples/{ds}": table})
-        if first:
-            wandb.log({"samples": table})
-            first = False
+    # first = True
+    # for ds in expand_datasets(cfg.datasets):
+    #     table = run_one_dataset(llm, tok, cfg, ds)
+    #     wandb.log({f"samples/{ds}": table})
+    #     if first:
+    #         wandb.log({"samples": table})
+    #         first = False
 
-    run.finish()
+    # run.finish()
 
 
 if __name__ == "__main__":
