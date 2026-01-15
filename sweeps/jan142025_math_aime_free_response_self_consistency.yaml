@@ -1,0 +1,47 @@
+program: scripts/self_consistency_experiment.py
+method: grid
+metric:
+  name: samples
+  goal: maximize
+
+parameters:
+  model:
+    values:
+      - Qwen/Qwen3-32B
+      - openai/GPT-oss-20B
+      - Qwen/Qwen-32B
+
+  datasets:
+    values:
+      - "math"
+      - "aime"
+
+  split:
+    value: test
+  max_samples:
+    value: 128
+
+  # 200 samples per problem
+  k:
+    value: 200
+
+  temperature:
+    values: [1.0]
+  top_p:
+    value: 0.90
+  max_new_tokens:
+    value: 31000
+  seed:
+    value: 0
+  dtype:
+    value: bfloat16
+
+  tensor_parallel_size:
+    value: 8
+  max_model_len:
+    value: 32768
+  gpu_memory_utilization:
+    value: 0.85
+
+  system:
+    value: "You are a careful math assistant. Solve the problem and, after giving your solution, output ONLY the final answer wrapped in \\boxed{...}."
