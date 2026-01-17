@@ -8,9 +8,9 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy import stats
 
-REFRESH = True  # Set to True to re-download data
-N_BINS = 10  # Number of bins for calibration plots
-MIN_SAMPLES_PER_BIN = 20  # Minimum samples required per bin to compute CI
+REFRESH = False  # Set to True to re-download data
+N_BINS = 5  # Number of bins for calibration plots (reduced from 10 to get more samples per bin)
+MIN_SAMPLES_PER_BIN = 10  # Minimum samples required per bin to compute CI (reduced from 20 for smaller datasets)
 CONFIDENCE_LEVEL = 0.95  # 95% confidence intervals
 
 # Configuration and data loading

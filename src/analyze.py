@@ -134,7 +134,13 @@ def download_wandb_project_runs_configs(
     """Download run configurations from wandb sweeps."""
     assert filetype in {"csv", "feather", "parquet"}
 
-    filename = "sweeps=" + ",".join(sweep_ids)
+    api = wandb.Api(timeout=600)
+
+    if wandb_username is None:
+        wandb_username = api.viewer.username
+
+    # Include username in filename to avoid collisions
+    filename = f"user={wandb_username}_sweeps=" + ",".join(sweep_ids)
     hashed_filename = hashlib.md5(filename.encode()).hexdigest()
     runs_configs_df_path = os.path.join(
         data_dir, hashed_filename + f"_runs_configs.{filetype}"
@@ -142,11 +148,6 @@ def download_wandb_project_runs_configs(
 
     if refresh or not os.path.isfile(runs_configs_df_path):
         print(f"Creating {runs_configs_df_path} anew.")
-
-        api = wandb.Api(timeout=600)
-
-        if wandb_username is None:
-            wandb_username = api.viewer.username
 
         sweep_results_list = []
 
@@ -258,7 +259,13 @@ def download_wandb_sweep_runs_responses(
     """
     assert filetype in {"csv", "feather", "parquet"}
 
-    filename = "sweeps=" + ",".join(sweep_ids)
+    api = wandb.Api(timeout=6000)
+
+    if wandb_username is None:
+        wandb_username = api.viewer.username
+
+    # Include username in filename to avoid collisions
+    filename = f"user={wandb_username}_sweeps=" + ",".join(sweep_ids)
     hashed_filename = hashlib.md5(filename.encode()).hexdigest()
     responses_df_path = os.path.join(
         data_dir, hashed_filename + f"_responses.{filetype}"
@@ -266,11 +273,6 @@ def download_wandb_sweep_runs_responses(
 
     if refresh or not os.path.isfile(responses_df_path):
         print(f"Creating {responses_df_path} anew.")
-        
-        api = wandb.Api(timeout=6000)
-
-        if wandb_username is None:
-            wandb_username = api.viewer.username
 
         all_responses = []
         
