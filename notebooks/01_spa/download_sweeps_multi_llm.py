@@ -7,14 +7,14 @@ from src.analyze import download_wandb_project_runs_configs, download_wandb_swee
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-REFRESH = True
+REFRESH = False
 N_BOOTSTRAP = 1000
 CONFIDENCE_LEVEL = 0.95
 
 # Configuration and data loading
 script_dir = os.path.dirname(os.path.abspath(__file__))
 data_dir, results_dir = setup_notebook_dir(script_dir, refresh=False)
-sweep_ids = ["4h2zjyof", "v2f7alml", "5oeyno7t", "6imeo6ue"]
+sweep_ids = ["4h2zjyof", "v2f7alml", "5oeyno7t", "dm625v8y", "0cn1rqtt", "6imeo6ue"]
 
 # List of usernames to check
 wandb_usernames = ['jkazdan', 'joshteam']

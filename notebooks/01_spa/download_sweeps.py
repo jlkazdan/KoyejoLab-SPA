@@ -8,14 +8,14 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy import stats
 
-REFRESH = True
+REFRESH = False
 N_BOOTSTRAP = 1000  # Number of bootstrap samples
 CONFIDENCE_LEVEL = 0.95  # 95% confidence intervals
 
 # Configuration and data loading
 script_dir = os.path.dirname(os.path.abspath(__file__))
 data_dir, results_dir = setup_notebook_dir(script_dir, refresh=REFRESH)
-sweep_ids = ["4h2zjyof", "v2f7alml", "5oeyno7t"]
+sweep_ids = ["4h2zjyof", "v2f7alml", "5oeyno7t", "dm625v8y", "0cn1rqtt", "6imeo6ue"]
 
 # List of usernames to check
 wandb_usernames = ['jkazdan', 'joshteam']
@@ -167,9 +167,9 @@ def process_answers(df, response_type, extract_confidence=False, extract_predict
                 if true_match and false_match:
                     true_conf = int(true_match.group(1))
                     false_conf = int(false_match.group(1))
-                    answer = True if true_conf > false_conf else False
+                    answer = 'true' if true_conf > false_conf else 'false'
                     confidence = max(true_conf, false_conf)
-                    return (answer, confidence, true_conf if answer else false_conf)
+                    return (answer, confidence, true_conf if answer == 'true' else false_conf)
             
             return None, None, None
         
@@ -182,44 +182,22 @@ def process_answers(df, response_type, extract_confidence=False, extract_predict
             print(f"No valid data after extraction for response_type: {response_type}")
             return None, None, None
     
-    # Convert answers to proper format based on dataset
-    if extract_confidence:
-        mask_com2sense = df['config_dataset_name'] == 'tasksource/com2sense'
-        df.loc[mask_com2sense, 'extracted_answer'] = df.loc[mask_com2sense, 'extracted_answer'].str.lower().map({'true': True, 'false': False})
-        
-        mask_boolq = df['config_dataset_name'] == 'google/boolq'
-        df.loc[mask_boolq, 'extracted_answer'] = df.loc[mask_boolq, 'extracted_answer'].str.upper().map({'TRUE': True, 'FALSE': False})
-        
-        mask_hle = df['config_dataset_name'] == 'cais/hle'
-        df.loc[mask_hle, 'extracted_answer'] = df.loc[mask_hle, 'extracted_answer'].str.lower()
-        
-        mask_future = df['config_dataset_name'] == 'kyssen/predict-the-futurebench-cutoff-June25'
-        df.loc[mask_future, 'extracted_answer'] = df.loc[mask_future, 'extracted_answer'].str.lower()
-    elif not extract_prediction:
-        mask_com2sense = df['config_dataset_name'] == 'tasksource/com2sense'
-        df.loc[mask_com2sense, 'extracted_answer'] = df.loc[mask_com2sense, 'extracted_answer'].str.lower().map({'true': True, 'false': False})
-        
-        mask_boolq = df['config_dataset_name'] == 'google/boolq'
-        df.loc[mask_boolq, 'extracted_answer'] = df.loc[mask_boolq, 'extracted_answer'].str.upper().map({'TRUE': True, 'FALSE': False})
-        
-        df.loc[mask_boolq, 'true_answer'] = df.loc[mask_boolq, 'true_answer'].apply(
-            lambda x: True if (x == True or str(x).lower() == 'true') else False
-        )
-        
-        mask_future = df['config_dataset_name'] == 'kyssen/predict-the-futurebench-cutoff-June25'
-        df.loc[mask_future, 'extracted_answer'] = df.loc[mask_future, 'extracted_answer'].str.lower()
-    
-    if extract_prediction:
-        mask_boolq = df['config_dataset_name'] == 'google/boolq'
-        df.loc[mask_boolq, 'true_answer'] = df.loc[mask_boolq, 'true_answer'].apply(
-            lambda x: True if (x == True or str(x).lower() == 'true') else False
-        )
-    
-    # Calculate correctness
-    df['correct'] = (
-        df['extracted_answer'].apply(lambda x: x.lower().strip() if isinstance(x, str) else x) == 
-        df['true_answer'].apply(lambda x: x.lower().strip() if isinstance(x, str) else x)
+    # Normalize all answers to lowercase strings for consistent comparison
+    # Handle extracted_answer - convert to lowercase string
+    df['extracted_answer'] = df['extracted_answer'].apply(
+        lambda x: str(x).lower() if pd.notna(x) else None
     )
+
+    # Handle true_answer - convert to lowercase string
+    df['true_answer'] = df['true_answer'].apply(
+        lambda x: str(x).lower() if pd.notna(x) else None
+    )
+
+    # Remove any None values that were created
+    df = df.dropna(subset=['extracted_answer', 'true_answer'])
+    
+    # Calculate correctness (both are already lowercase strings)
+    df['correct'] = (df['extracted_answer'].str.strip() == df['true_answer'].str.strip())
     
     # Individual accuracy with bootstrapping
     individual_results = []
@@ -354,18 +332,14 @@ def compute_highest_confidence(df):
     conf_df['confidence'] = extracted.apply(lambda x: x[1])
     conf_df = conf_df.dropna(subset=['extracted_answer', 'confidence'])
     
-    # Convert answers
-    mask_com2sense = conf_df['config_dataset_name'] == 'tasksource/com2sense'
-    conf_df.loc[mask_com2sense, 'extracted_answer'] = conf_df.loc[mask_com2sense, 'extracted_answer'].str.lower().map({'true': True, 'false': False})
-    
-    mask_boolq = conf_df['config_dataset_name'] == 'google/boolq'
-    conf_df.loc[mask_boolq, 'extracted_answer'] = conf_df.loc[mask_boolq, 'extracted_answer'].str.upper().map({'TRUE': True, 'FALSE': False})
-    
-    mask_hle = conf_df['config_dataset_name'] == 'cais/hle'
-    conf_df.loc[mask_hle, 'extracted_answer'] = conf_df.loc[mask_hle, 'extracted_answer'].str.lower()
-    
-    mask_future = conf_df['config_dataset_name'] == 'kyssen/predict-the-futurebench-cutoff-June25'
-    conf_df.loc[mask_future, 'extracted_answer'] = conf_df.loc[mask_future, 'extracted_answer'].str.lower()
+    # Normalize all answers to lowercase strings for consistent comparison
+    conf_df['extracted_answer'] = conf_df['extracted_answer'].apply(
+        lambda x: str(x).lower() if pd.notna(x) else None
+    )
+    conf_df['true_answer'] = conf_df['true_answer'].apply(
+        lambda x: str(x).lower() if pd.notna(x) else None
+    )
+    conf_df = conf_df.dropna(subset=['extracted_answer', 'true_answer'])
     
     # Vectorized bootstrap by question
     results = []
@@ -452,16 +426,25 @@ def compute_surprisingly_popular(df):
     pred_df['pred_false_conf'] = extracted_pred.apply(lambda x: x[1])
     pred_df = pred_df.dropna(subset=['pred_true_conf', 'pred_false_conf'])
     
+    # Normalize direct_df answers to lowercase strings
+    direct_df['extracted_answer'] = direct_df['extracted_answer'].apply(
+        lambda x: str(x).lower() if pd.notna(x) else None
+    )
+    direct_df['true_answer'] = direct_df['true_answer'].apply(
+        lambda x: str(x).lower() if pd.notna(x) else None
+    )
+    direct_df = direct_df.dropna(subset=['extracted_answer', 'true_answer'])
+
     # Convert direct answers to binary
     direct_df['answer_binary'] = 0
-    
+
     for dataset in ['cais/hle', 'kyssen/predict-the-futurebench-cutoff-June25']:
         dataset_mask = direct_df['config_dataset_name'] == dataset
         direct_df.loc[dataset_mask & direct_df['extracted_answer'].isin(['yes']), 'answer_binary'] = 1
-    
+
     for dataset in ['google/boolq', 'tasksource/com2sense']:
         dataset_mask = direct_df['config_dataset_name'] == dataset
-        direct_df.loc[dataset_mask & direct_df['extracted_answer'].isin(['true', True]), 'answer_binary'] = 1
+        direct_df.loc[dataset_mask & direct_df['extracted_answer'].isin(['true']), 'answer_binary'] = 1
     
     # Vectorized bootstrap by question
     results = []
@@ -492,18 +475,14 @@ def compute_surprisingly_popular(df):
             gap_true = avg_direct - (avg_pred_true / 100)
             gap_false = (1 - avg_direct) - (avg_pred_false / 100)
             
-            sp_answer = True if gap_true > gap_false else False
-            
-            # Convert to match dataset format
+            # Determine SP answer based on gap - return as string matching dataset format
             if dataset in ['cais/hle', 'kyssen/predict-the-futurebench-cutoff-June25']:
-                sp_answer = 'yes' if sp_answer else 'no'
-            
+                sp_answer = 'yes' if gap_true > gap_false else 'no'
+            else:  # google/boolq, tasksource/com2sense
+                sp_answer = 'true' if gap_true > gap_false else 'false'
+
             true_answer = q_direct['true_answer'].iloc[0]
-            
-            # Handle boolq conversion
-            if dataset == 'google/boolq':
-                true_answer = True if (true_answer == True or str(true_answer).lower() == 'true') else False
-            
+
             question_correct[q] = (sp_answer == true_answer)
         
         # Convert to array
