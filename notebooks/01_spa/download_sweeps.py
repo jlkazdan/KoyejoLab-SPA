@@ -8,6 +8,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy import stats
 
+np.random.seed(42)    # for reproducibility
+
 REFRESH = False
 N_BOOTSTRAP = 1000  # Number of bootstrap samples
 CONFIDENCE_LEVEL = 0.95  # 95% confidence intervals

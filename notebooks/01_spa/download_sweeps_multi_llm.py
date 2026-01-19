@@ -7,6 +7,8 @@ from src.analyze import download_wandb_project_runs_configs, download_wandb_swee
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+np.random.seed(42)    
+
 REFRESH = False
 N_BOOTSTRAP = 1000
 CONFIDENCE_LEVEL = 0.95
