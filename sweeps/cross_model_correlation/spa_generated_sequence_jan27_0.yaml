@@ -31,7 +31,7 @@ parameters:
     value: bfloat16
 
   tensor_parallel_size:
-    value: 4
+    value: 2
 
   max_model_len:
     value: 4096
