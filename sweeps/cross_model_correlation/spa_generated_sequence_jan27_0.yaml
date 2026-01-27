@@ -1,6 +1,6 @@
 entity: jchud-stanford-university
 project: correlation-experiment
-program: correlation_eval.py
+program: scripts/correlation_eval.py
 method: grid
 metric:
   name: samples
