@@ -1,0 +1,40 @@
+program: correlation_eval.py
+method: grid
+metric:
+  name: samples
+  goal: maximize
+
+parameters:
+  model:
+    values:
+      - google/gemma-3-4b-it
+      - Qwen/Qwen3-32B
+      # - GPT-oss-20B
+      # - GPT-oss-120B
+
+  sequences_path:
+    value: correlation_data/correlation_data.csv
+
+  temperature:
+    values: [0.7]
+
+  max_tokens:
+    value: 1000
+
+  seed:
+    value: 0
+
+  dtype:
+    value: half
+
+  tensor_parallel_size:
+    value: 4
+
+  max_model_len:
+    value: 4096
+
+  gpu_memory_utilization:
+    value: 0.85
+
+  system:
+    value: "You are participating in a simple task. You will see a random sequence of characters. After seeing it, you must choose exactly one letter: A, B, C, or D. Just output the single letter, nothing else."

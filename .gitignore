@@ -33,3 +33,8 @@ jessica_playground/math_results.csv
 
 *.wandb
 
+wandb/
+**/artifacts/
+*.table.json
+*.wandb
+*_results.csv
