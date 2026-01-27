@@ -1,5 +1,4 @@
 import os
-
 import csv
 import wandb
 from collections import Counter
@@ -9,13 +8,12 @@ from vllm import LLM, SamplingParams
 SYSTEM_PROMPT = (
     "You are participating in a simple task. You will see a random sequence of characters. "
     "After seeing it, you must choose exactly one letter: A, B, C, or D. "
-    "Just output the single letter, nothing else."
+    "Output your final answer as \\boxed{X} where X is A, B, C, or D."
 )
 
 USER_TEMPLATE = """Here is a random sequence:
 {sequence}
-Now choose one option: (A), (B), (C), or (D). Include nothing but the letter of your choosing in your final answer.
-Your choice:"""
+Now choose one option: (A), (B), (C), or (D). Output your answer as \\boxed{{X}} where X is A, B, C, or D."""
 
 
 def load_sequences(filepath: str) -> list:
@@ -33,11 +31,33 @@ def build_prompt(tok, system: str, user: str) -> str:
     return tok.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
 
 
+def boxed(s: str) -> str:
+    """Extract content from \\boxed{...}."""
+    i = s.rfind(r"\boxed")
+    if i < 0:
+        return ""
+    j = s.find("{", i)
+    if j < 0:
+        return ""
+    d = 0
+    for k in range(j, len(s)):
+        if s[k] == "{":
+            d += 1
+        elif s[k] == "}":
+            d -= 1
+            if d == 0:
+                return s[j + 1 : k].strip()
+    return ""
+
+
 def extract_choice(response: str) -> str:
-    """Extract A, B, C, or D from response."""
-    response = response.strip().upper()
-    # Remove parentheses if present
-    response = response.replace("(", "").replace(")", "")
+    """Extract A, B, C, or D from response, preferring boxed format."""
+    # Try boxed first
+    b = boxed(response).upper().replace("(", "").replace(")", "")
+    if b in "ABCD":
+        return b
+    # Fallback: first ABCD character
+    response = response.strip().upper().replace("(", "").replace(")", "")
     if response and response[0] in "ABCD":
         return response[0]
     for char in response:
@@ -77,12 +97,12 @@ def main():
         model="Qwen/Qwen3-32B",
         sequences_path="correlation_data/correlation_data.csv",
         temperature=0.0,
-        max_tokens=10,
+        max_tokens=32,
         seed=0,
-        dtype="half",
+        dtype="bfloat16",
         tensor_parallel_size=4,
         max_model_len=4096,
-        gpu_memory_utilization=0.95,
+        gpu_memory_utilization=0.85,
         system=SYSTEM_PROMPT,
     )
 

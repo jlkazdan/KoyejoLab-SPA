@@ -19,10 +19,10 @@ parameters:
     value: correlation_data/correlation_data.csv
 
   temperature:
-    value: 0.0
+    value: [0.7]
 
   max_tokens:
-    value: 100
+    value: 10000
 
   seed:
     values: [0, 1, 2]
@@ -34,7 +34,7 @@ parameters:
     value: 2
 
   max_model_len:
-    value: 4096
+    value: 30000
 
   gpu_memory_utilization:
     value: 0.85
