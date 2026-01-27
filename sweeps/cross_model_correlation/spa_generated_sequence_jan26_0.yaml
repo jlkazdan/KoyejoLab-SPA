@@ -11,6 +11,9 @@ parameters:
     values:
       - google/gemma-3-4b-it
       - Qwen/Qwen3-32B
+      - openai/GPT-oss-20B
+      - openai/GPT-oss-120B
+      - Qwen/Qwen2.5-3B-Instruct
       # - Qwen/Qwen3-235B-A22B
       # - GPT-oss-20B
       # - GPT-oss-120B
@@ -22,10 +25,10 @@ parameters:
     value: 0.7
 
   max_tokens:
-    value: 10000
+    value: 20000
 
   seed:
-    values: [0, 1, 2]
+    values: [0, 1]
 
   dtype:
     value: bfloat16
@@ -34,10 +37,10 @@ parameters:
     value: 2
 
   max_model_len:
-    value: 30000
+    value: 32000
 
   gpu_memory_utilization:
     value: 0.85
 
   system:
-    value: "You are participating in a simple task. You will see a random sequence of characters. After seeing it, you must choose exactly one letter: A, B, C, or D. Just output the single letter, nothing else."
+    value: "You are participating in a simple task. You will see a random sequence of characters. After seeing it, you must choose exactly one letter: A, B, C, or D."

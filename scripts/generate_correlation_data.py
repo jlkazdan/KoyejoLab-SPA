@@ -8,7 +8,7 @@ rng = np.random.default_rng()
 
 # Generate random integers from low (inclusive) to high (exclusive)
 # e.g., 0 to 9
-def generate_sequences(num_sequences=1000, length=32):
+def generate_sequences(num_sequences, length=32):
     rng = np.random.default_rng()
     characters = string.ascii_letters + string.digits + string.punctuation
     char_array = np.array(list(characters))
@@ -45,7 +45,7 @@ def save_sequences_to_csv(sequences, filepath):
 if __name__ == "__main__":
     output_path = "correlation_data/correlation_data.csv"
     
-    my_data = generate_sequences(num_sequences=1000, length=32)
+    my_data = generate_sequences(num_sequences=2000, length=32)
     
     # Save
     save_sequences_to_csv(my_data, output_path)
