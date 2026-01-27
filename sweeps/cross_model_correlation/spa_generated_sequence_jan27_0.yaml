@@ -28,7 +28,7 @@ parameters:
     values: [0, 1, 2]
 
   dtype:
-    value: half
+    value: bfloat16
 
   tensor_parallel_size:
     value: 4
