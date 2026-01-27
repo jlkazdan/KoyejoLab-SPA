@@ -22,7 +22,7 @@ parameters:
     value: 0.0
 
   max_tokens:
-    value: 10
+    value: 100
 
   seed:
     values: [0, 1, 2]
@@ -37,7 +37,7 @@ parameters:
     value: 4096
 
   gpu_memory_utilization:
-    value: 0.95
+    value: 0.85
 
   system:
     value: "You are participating in a simple task. You will see a random sequence of characters. After seeing it, you must choose exactly one letter: A, B, C, or D. Just output the single letter, nothing else."
