@@ -19,7 +19,7 @@ parameters:
     value: correlation_data/correlation_data.csv
 
   temperature:
-    value: [0.7]
+    value: 0.7
 
   max_tokens:
     value: 10000
