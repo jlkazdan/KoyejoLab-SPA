@@ -3,7 +3,7 @@ import re
 import pandas as pd
 import numpy as np
 import wandb
-from src.analyze import download_wandb_project_runs_configs, download_wandb_sweep_runs_responses, setup_notebook_dir
+from src.analyze import download_wandb_project_runs_configs, download_wandb_sweep_runs_responses, setup_notebook_dir, fix_com2sense_labels
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy import stats
@@ -73,6 +73,12 @@ else:
 
 print(f"\nTotal run configs: {len(runs_configs_df)}")
 print(f"Total responses: {len(responses_df)}")
+
+# Fix com2sense labels before processing
+print("\n" + "="*60)
+print("FIXING COM2SENSE LABELS")
+print("="*60)
+responses_df = fix_com2sense_labels(responses_df, data_dir)
 
 # CRITICAL: Normalize all answers to lowercase strings for consistent comparison
 print("\n" + "="*60)

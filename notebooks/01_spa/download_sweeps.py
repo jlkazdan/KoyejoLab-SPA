@@ -3,7 +3,7 @@ import re
 import pandas as pd
 import numpy as np
 import wandb
-from src.analyze import download_wandb_project_runs_configs, download_wandb_sweep_runs_responses, setup_notebook_dir
+from src.analyze import download_wandb_project_runs_configs, download_wandb_sweep_runs_responses, setup_notebook_dir, fix_com2sense_labels
 import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy import stats
@@ -30,26 +30,26 @@ for username in wandb_usernames:
     print(f"\n{'='*60}")
     print(f"Loading data for username: {username}")
     print(f"{'='*60}")
-    
+
     try:
         runs_configs = download_wandb_project_runs_configs(
-            wandb_project_path="spa-experiments", 
-            data_dir=data_dir, 
-            sweep_ids=sweep_ids, 
-            refresh=REFRESH, 
+            wandb_project_path="spa-experiments",
+            data_dir=data_dir,
+            sweep_ids=sweep_ids,
+            refresh=REFRESH,
             wandb_username=username
         )
         all_runs_configs.append(runs_configs)
         print(f"✓ Loaded {len(runs_configs)} run configs from {username}")
     except Exception as e:
         print(f"⚠ Failed to load run configs from {username}: {e}")
-    
+
     try:
         responses = download_wandb_sweep_runs_responses(
-            wandb_project_path="spa-experiments", 
+            wandb_project_path="spa-experiments",
             data_dir=data_dir,
-            sweep_ids=sweep_ids, 
-            refresh=REFRESH, 
+            sweep_ids=sweep_ids,
+            refresh=REFRESH,
             wandb_username=username
         )
         all_responses.append(responses)
@@ -79,6 +79,12 @@ if len(runs_configs_df) > 0:
     print(f"Unique runs: {runs_configs_df['run_id'].nunique()}")
 if len(responses_df) > 0:
     print(f"Unique questions: {responses_df['question'].nunique() if 'question' in responses_df.columns else 'N/A'}")
+
+# Fix com2sense labels before filtering
+print(f"\n{'='*60}")
+print(f"FIXING COM2SENSE LABELS")
+print(f"{'='*60}")
+responses_df = fix_com2sense_labels(responses_df, data_dir)
 
 # Filter unclear answers
 responses_df = responses_df[responses_df['extracted_answer'] != 'unclear']
@@ -650,7 +656,7 @@ for dataset in datasets:
         # Skip error bar containers
         if isinstance(container, plt.matplotlib.container.BarContainer):
             labels = [f'{v:.1f}' if v > 0 else '' for v in container.datavalues]
-            ax.bar_label(container, labels=labels, fontsize=7, fontweight='bold', padding=2)
+            ax.bar_label(container, labels=labels, fontsize=9, fontweight='bold', padding=3)
     
     # Customize plot
     ax.set_xlabel('Model (Temperature)', fontsize=13, fontweight='bold')
