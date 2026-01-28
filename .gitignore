@@ -38,3 +38,4 @@ wandb/
 *.table.json
 *.wandb
 *_results.csv
+.conda/
