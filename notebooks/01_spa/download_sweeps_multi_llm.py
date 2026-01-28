@@ -3,11 +3,11 @@ import re
 import pandas as pd
 import numpy as np
 import wandb
-from src.analyze import download_wandb_project_runs_configs, download_wandb_sweep_runs_responses, setup_notebook_dir
+from src.analyze import download_wandb_project_runs_configs, download_wandb_sweep_runs_responses, setup_notebook_dir, fix_com2sense_labels
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-np.random.seed(42)    
+np.random.seed(42)
 
 REFRESH = False
 N_BOOTSTRAP = 1000
@@ -29,26 +29,26 @@ for username in wandb_usernames:
     print(f"\n{'='*60}")
     print(f"Loading data for username: {username}")
     print(f"{'='*60}")
-    
+
     try:
         runs_configs = download_wandb_project_runs_configs(
-            wandb_project_path="spa-experiments", 
-            data_dir=data_dir, 
-            sweep_ids=sweep_ids, 
-            refresh=REFRESH, 
+            wandb_project_path="spa-experiments",
+            data_dir=data_dir,
+            sweep_ids=sweep_ids,
+            refresh=REFRESH,
             wandb_username=username
         )
         all_runs_configs.append(runs_configs)
         print(f"✓ Loaded {len(runs_configs)} run configs from {username}")
     except Exception as e:
         print(f"⚠ Failed to load run configs from {username}: {e}")
-    
+
     try:
         responses = download_wandb_sweep_runs_responses(
-            wandb_project_path="spa-experiments", 
+            wandb_project_path="spa-experiments",
             data_dir=data_dir,
-            sweep_ids=sweep_ids, 
-            refresh=REFRESH, 
+            sweep_ids=sweep_ids,
+            refresh=REFRESH,
             wandb_username=username
         )
         all_responses.append(responses)
@@ -81,8 +81,21 @@ if len(responses_df) > 0:
     print(f"Unique models: {responses_df['config_model_id'].nunique()}")
     print(f"Response types: {responses_df['response_type'].unique()}")
 
+# Fix com2sense labels before filtering
+print(f"\n{'='*60}")
+print(f"FIXING COM2SENSE LABELS")
+print(f"{'='*60}")
+responses_df = fix_com2sense_labels(responses_df, data_dir)
+
 # Filter unclear answers
 responses_df = responses_df[responses_df['extracted_answer'] != 'unclear']
+
+
+def normalize_answer(value):
+    """Normalize answer to lowercase string for consistent comparison"""
+    if pd.isna(value):
+        return None
+    return str(value).lower().strip()
 
 
 def bootstrap_accuracy(correct_array, n_bootstrap=N_BOOTSTRAP, confidence_level=CONFIDENCE_LEVEL):
@@ -90,17 +103,17 @@ def bootstrap_accuracy(correct_array, n_bootstrap=N_BOOTSTRAP, confidence_level=
     n = len(correct_array)
     if n == 0:
         return np.nan, np.nan, np.nan
-    
+
     bootstrap_indices = np.random.randint(0, n, size=(n_bootstrap, n))
     bootstrap_samples = correct_array[bootstrap_indices]
     bootstrap_means = bootstrap_samples.mean(axis=1)
-    
+
     mean_acc = correct_array.mean()
-    
+
     alpha = 1 - confidence_level
     lower_ci = np.percentile(bootstrap_means, 100 * alpha / 2)
     upper_ci = np.percentile(bootstrap_means, 100 * (1 - alpha / 2))
-    
+
     return mean_acc, lower_ci, upper_ci
 
 
@@ -130,10 +143,10 @@ def compute_direct_majority_ensemble(df):
     mask_future = direct_df['config_dataset_name'] == 'kyssen/predict-the-futurebench-cutoff-June25'
     direct_df.loc[mask_future, 'extracted_answer'] = direct_df.loc[mask_future, 'extracted_answer'].str.lower()
     
-    # Calculate correctness
+    # Calculate correctness - normalize to lowercase strings for comparison
     direct_df['correct'] = (
-        direct_df['extracted_answer'].apply(lambda x: x.lower().strip() if isinstance(x, str) else x) == 
-        direct_df['true_answer'].apply(lambda x: x.lower().strip() if isinstance(x, str) else x)
+        direct_df['extracted_answer'].apply(lambda x: str(x).lower().strip() if pd.notna(x) else None) ==
+        direct_df['true_answer'].apply(lambda x: str(x).lower().strip() if pd.notna(x) else None)
     )
     
     results = []
@@ -148,7 +161,7 @@ def compute_direct_majority_ensemble(df):
             if len(vote_counts) > 0:
                 majority_answer = vote_counts.idxmax()
                 true_answer = q_data['true_answer'].iloc[0]
-                question_correct[q] = (majority_answer == true_answer)
+                question_correct[q] = (normalize_answer(majority_answer) == normalize_answer(true_answer))
         
         correct_array = np.array([question_correct[q] for q in questions if q in question_correct])
         
@@ -214,7 +227,7 @@ def compute_confidence_weighted_ensemble(df):
     for dataset, group in conf_df.groupby('config_dataset_name'):
         questions = group['question'].unique()
         question_correct = {}
-        
+
         for q in questions:
             q_data = group[group['question'] == q]
             # Confidence-weighted vote
@@ -222,7 +235,7 @@ def compute_confidence_weighted_ensemble(df):
             if len(weighted_votes) > 0:
                 majority_answer = weighted_votes.idxmax()
                 true_answer = q_data['true_answer'].iloc[0]
-                question_correct[q] = (majority_answer == true_answer)
+                question_correct[q] = (normalize_answer(majority_answer) == normalize_answer(true_answer))
         
         correct_array = np.array([question_correct[q] for q in questions if q in question_correct])
         
@@ -297,7 +310,7 @@ def compute_prediction_weighted_ensemble(df):
     for dataset, group in pred_df.groupby('config_dataset_name'):
         questions = group['question'].unique()
         question_correct = {}
-        
+
         for q in questions:
             q_data = group[group['question'] == q]
             # Confidence-weighted vote
@@ -305,7 +318,7 @@ def compute_prediction_weighted_ensemble(df):
             if len(weighted_votes) > 0:
                 majority_answer = weighted_votes.idxmax()
                 true_answer = q_data['true_answer'].iloc[0]
-                question_correct[q] = (majority_answer == true_answer)
+                question_correct[q] = (normalize_answer(majority_answer) == normalize_answer(true_answer))
         
         correct_array = np.array([question_correct[q] for q in questions if q in question_correct])
         
@@ -376,7 +389,7 @@ def compute_ensemble_highest_confidence(df):
             max_idx = q_data['confidence'].idxmax()
             selected_answer = q_data.loc[max_idx, 'extracted_answer']
             true_answer = q_data['true_answer'].iloc[0]
-            question_correct[q] = (selected_answer == true_answer)
+            question_correct[q] = (normalize_answer(selected_answer) == normalize_answer(true_answer))
         
         correct_array = np.array([question_correct[q] for q in questions])
         
@@ -478,16 +491,13 @@ def compute_ensemble_surprisingly_popular(df):
             gap_false = (1 - avg_direct) - (avg_pred_false / 100)
             
             sp_answer = True if gap_true > gap_false else False
-            
+
             if dataset in ['cais/hle', 'kyssen/predict-the-futurebench-cutoff-June25']:
                 sp_answer = 'yes' if sp_answer else 'no'
-            
+
             true_answer = q_direct['true_answer'].iloc[0]
-            
-            if dataset == 'google/boolq':
-                true_answer = True if (true_answer == True or str(true_answer).lower() == 'true') else False
-            
-            question_correct[q] = (sp_answer == true_answer)
+
+            question_correct[q] = (normalize_answer(sp_answer) == normalize_answer(true_answer))
         
         correct_array = np.array([question_correct[q] for q in common_questions])
         

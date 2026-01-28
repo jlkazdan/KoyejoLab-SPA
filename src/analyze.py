@@ -11,6 +11,101 @@ from typing import List, Optional, Tuple
 import wandb
 from tqdm import tqdm
 
+
+def fix_com2sense_labels(responses_df: pd.DataFrame, data_dir: str) -> pd.DataFrame:
+    """
+    Fix com2sense labels by downloading the correct dataset from HuggingFace
+    and matching questions to their correct labels.
+
+    Args:
+        responses_df: DataFrame with responses
+        data_dir: Directory to cache the com2sense dataset
+
+    Returns:
+        Updated DataFrame with correct labels for com2sense questions
+    """
+    from datasets import load_dataset
+
+    # Check if there are any com2sense questions
+    com2sense_mask = responses_df['config_dataset_name'] == 'tasksource/com2sense'
+    if not com2sense_mask.any():
+        print("No com2sense questions found in responses")
+        return responses_df
+
+    print("Fixing com2sense labels...")
+
+    # Download the com2sense dataset
+    com2sense_cache_path = os.path.join(data_dir, 'com2sense_mapping.csv')
+
+    if os.path.exists(com2sense_cache_path):
+        print(f"Loading cached com2sense mapping from {com2sense_cache_path}")
+        com2sense_mapping = pd.read_csv(com2sense_cache_path)
+    else:
+        print("Downloading com2sense dataset from HuggingFace...")
+        try:
+            dataset = load_dataset('tasksource/com2sense', split='validation')
+
+            # Create mapping from sentence to label
+            # Labels are strings "True" or "False" in the dataset
+            mapping_data = []
+            for item in dataset:
+                # Convert string "True"/"False" to boolean True/False
+                label_str = item['label']
+                label_bool = True if label_str == "True" else False
+                mapping_data.append({
+                    'sent': item['sent'],
+                    'label': label_bool
+                })
+
+            com2sense_mapping = pd.DataFrame(mapping_data)
+            com2sense_mapping.to_csv(com2sense_cache_path, index=False)
+            print(f"Cached com2sense mapping to {com2sense_cache_path}")
+        except Exception as e:
+            print(f"Error downloading com2sense dataset: {e}")
+            import traceback
+            traceback.print_exc()
+            return responses_df
+
+    print(f"Loaded {len(com2sense_mapping)} com2sense questions with correct labels")
+    print(f"Label distribution - True: {(com2sense_mapping['label'] == True).sum()}, False: {(com2sense_mapping['label'] == False).sum()}")
+
+    # Create a dictionary for fast lookup
+    sent_to_label = dict(zip(com2sense_mapping['sent'], com2sense_mapping['label']))
+
+    # Update the true_answer for com2sense questions
+    responses_df = responses_df.copy()
+
+    def fix_label(row):
+        if row['config_dataset_name'] == 'tasksource/com2sense':
+            question = row['question']
+            if question in sent_to_label:
+                return sent_to_label[question]
+            else:
+                # Try to find a match by stripping whitespace
+                question_stripped = question.strip()
+                for sent, label in sent_to_label.items():
+                    if sent.strip() == question_stripped:
+                        return label
+                print(f"Warning: Could not find label for question: {question[:100]}")
+                return row['true_answer']
+        return row['true_answer']
+
+    original_labels = responses_df[com2sense_mask]['true_answer'].copy()
+    responses_df.loc[:, 'true_answer'] = responses_df.apply(fix_label, axis=1)
+
+    # Count how many labels were changed
+    updated_labels = responses_df[com2sense_mask]['true_answer']
+    # Convert to strings for comparison to avoid type mismatches
+    orig_str = original_labels.astype(str).str.lower()
+    upd_str = updated_labels.astype(str).str.lower()
+    num_changed = (orig_str != upd_str).sum()
+    total_com2sense = com2sense_mask.sum()
+
+    print(f"Updated {num_changed} out of {total_com2sense} com2sense labels ({100*num_changed/total_com2sense:.1f}%)")
+
+    return responses_df
+
+
 def download_wandb_data_from_multiple_users(
     wandb_usernames: List[str],
     wandb_project_path: str,
