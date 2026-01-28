@@ -1,0 +1,53 @@
+entity: jchud-stanford-university
+project: correlation-experiment
+program: scripts/correlation_eval.py
+method: grid
+metric:
+  name: samples
+  goal: maximize
+
+parameters:
+  model:
+    values:
+      # - meta-llama/Llama-3.2-1B-Instruct
+      # - meta-llama/Llama-3.2-3B-Instruct
+      # - meta-llama/Llama-3.1-8B-Instruct
+      # - google/gemma-3-1b-it
+      # - google/gemma-3-4b-it
+      # - google/gemma-7b-it
+      # - Qwen/Qwen2.5-3B-Instruct
+      # - Qwen/Qwen2.5-7B-Instruct
+      - google/gemma-3-12b-it
+      # - Qwen/Qwen3-32B
+
+
+  sequences_path:
+    value: correlation_data/correlation_data.csv
+
+  temperature:
+    values: [1.0]
+
+  max_tokens:
+    value: 20000
+
+  seed:
+    value: 0
+
+  dtype:
+    value: bfloat16
+
+  tensor_parallel_size:
+    value: 2
+
+  max_model_len:
+    value: 8192
+
+  trust_remote_code:
+    value: true
+
+  gpu_memory_utilization:
+    value: 0.90
+
+  system:
+    value: "You are participating in a simple task. You will see a random sequence of characters. After seeing it, you must choose exactly one letter: A, B, C, or D. Include this letter and NOTHING else. It is very important you include the letter and nothing else."
+  

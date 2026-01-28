@@ -1,0 +1,51 @@
+entity: jchud-stanford-university
+project: correlation-experiment
+program: scripts/correlation_eval.py
+method: grid
+metric:
+  name: samples
+  goal: maximize
+
+parameters:
+  model:
+    values:
+      - google/gemma-3-4b-it
+
+  sequences_path:
+    value: correlation_data/correlation_data.csv
+
+  temperature:
+    value: 0.7
+
+  max_tokens:
+    value: 20000
+
+  seed:
+    values: [0, 1]
+
+  dtype:
+    value: bfloat16
+
+  tensor_parallel_size:
+    value: 2
+
+  max_model_len:
+    value: 8192
+
+  trust_remote_code:
+    value: true
+
+  gpu_memory_utilization:
+    value: 0.85
+
+  # system:
+  #   value: "You are participating in a simple task. You will see a random sequence of characters. After seeing it, you must choose exactly one letter: A, B, C, or D. Include this letter and NOTHING else. It is very important you include the letter and nothing else."
+  user_prompt:
+    value: |
+      You are participating in a simple task. You will see a random sequence of characters.
+      After seeing it, you must choose exactly one letter: A, B, C, or D.  
+      
+      Here is a random sequence:
+      {sequence}
+      
+      Now choose one option: (A), (B), (C), or (D). Output your answer as a single letter.

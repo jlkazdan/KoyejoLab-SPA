@@ -45,7 +45,7 @@ def save_sequences_to_csv(sequences, filepath):
 if __name__ == "__main__":
     output_path = "correlation_data/correlation_data.csv"
     
-    my_data = generate_sequences(num_sequences=2000, length=32)
+    my_data = generate_sequences(num_sequences=10000, length=32)
     
     # Save
     save_sequences_to_csv(my_data, output_path)
