@@ -1,0 +1,53 @@
+============================================================
+PAPER STATISTICS SUMMARY
+============================================================
+
+SECTION 5.2 - CONFIDENCE CALIBRATION
+----------------------------------------
+Correlation (confidence, accuracy): r = 0.139
+Accuracy at 90%+ confidence: 63.6%
+Correlation (confidence, agreement): r = 0.126
+
+SECTION 5.3 - SOCIAL PREDICTION
+----------------------------------------
+Correlation (predicted vote, actual vote): r = 0.732
+MAE (predicted vs actual): 0.238
+
+SECTION 5.1 - SP MAJORITY SELECTION (HLE)
+----------------------------------------
+SP selects majority answer: 97.1%
+SP correct when selecting minority: 70.0%
+SP correct when selecting majority: 19.2%
+
+============================================================
+FULL STATISTICS
+============================================================
+acc_90plus_boolq: 72.9582
+acc_90plus_com2sense: 64.8353
+acc_90plus_hle: 13.9619
+acc_90plus_predict-the-futurebench-cutoff-June25: 68.4393
+accuracy_at_90plus_confidence: 63.5807
+mae_pred_boolq: 0.2269
+mae_pred_com2sense: 0.1918
+mae_pred_hle: 0.2772
+mae_pred_predict-the-futurebench-cutoff-June25: 0.2731
+mae_predicted_actual: 0.2381
+r_conf_acc_boolq: 0.1038
+r_conf_acc_com2sense: 0.1687
+r_conf_acc_hle: -0.1646
+r_conf_acc_predict-the-futurebench-cutoff-June25: 0.0941
+r_conf_agree_google/gemma-3-4b-it: -0.0020
+r_conf_agree_gpt-oss-120b-1: 0.1810
+r_conf_agree_gpt-oss-20b-1: 0.1234
+r_conf_agree_qwen3-235b-a22b-2507-v1: 0.1668
+r_conf_agree_qwen3-32b-v1: 0.0507
+r_confidence_accuracy: 0.1388
+r_confidence_agreement: 0.1255
+r_pred_actual_boolq: 0.6167
+r_pred_actual_com2sense: 0.8552
+r_pred_actual_hle: 0.4347
+r_pred_actual_predict-the-futurebench-cutoff-June25: 0.6717
+r_predicted_actual_vote: 0.7323
+sp_correct_when_majority_hle: 19.1740
+sp_correct_when_minority_hle: 70.0000
+sp_selects_majority_pct_hle: 97.1347

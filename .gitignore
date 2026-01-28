@@ -33,3 +33,5 @@ jessica_playground/math_results.csv
 
 *.wandb
 
+notebooks/01_spa/data/*.csv
+src/__pycache__/

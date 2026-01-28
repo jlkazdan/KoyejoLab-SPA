@@ -764,7 +764,202 @@ if len(spa_df) > 0:
 else:
     print("No prediction data available")
 
+# ============================================================================
+# 7. COMPUTE CORRELATION STATISTICS FOR PAPER
+# ============================================================================
 print("\n" + "="*60)
-print("ALL VISUALIZATIONS COMPLETE")
+print("COMPUTING CORRELATION STATISTICS FOR PAPER")
+print("="*60)
+
+paper_stats = {}
+
+# 7.1 Confidence vs Accuracy correlation
+if len(conf_df) > 0:
+    conf_df['correct_binary'] = conf_df['correct'].astype(float)
+    r_conf_acc = conf_df['confidence'].corr(conf_df['correct_binary'])
+    paper_stats['r_confidence_accuracy'] = r_conf_acc
+    print(f"\n1. Correlation (confidence, accuracy): r = {r_conf_acc:.3f}")
+
+    # Per-dataset breakdown
+    print("   Per-dataset breakdown:")
+    for dataset in sorted(conf_df['config_dataset_name'].unique()):
+        ds_data = conf_df[conf_df['config_dataset_name'] == dataset]
+        r_ds = ds_data['confidence'].corr(ds_data['correct_binary'])
+        ds_short = dataset.split('/')[-1]
+        paper_stats[f'r_conf_acc_{ds_short}'] = r_ds
+        print(f"     {ds_short}: r = {r_ds:.3f}")
+
+    # Accuracy in 90-100% confidence bin
+    high_conf = conf_df[conf_df['confidence'] >= 90]
+    if len(high_conf) > 0:
+        acc_high_conf = high_conf['correct'].mean() * 100
+        paper_stats['accuracy_at_90plus_confidence'] = acc_high_conf
+        print(f"\n2. Accuracy at 90%+ confidence: {acc_high_conf:.1f}%")
+
+        # Per-dataset
+        print("   Per-dataset breakdown:")
+        for dataset in sorted(high_conf['config_dataset_name'].unique()):
+            ds_data = high_conf[high_conf['config_dataset_name'] == dataset]
+            acc_ds = ds_data['correct'].mean() * 100
+            n_samples = len(ds_data)
+            ds_short = dataset.split('/')[-1]
+            paper_stats[f'acc_90plus_{ds_short}'] = acc_ds
+            print(f"     {ds_short}: {acc_ds:.1f}% (n={n_samples})")
+
+# 7.2 Confidence vs Agreement correlation
+if len(agreement_df) > 0:
+    r_conf_agree = agreement_df['mean_confidence'].corr(agreement_df['agreement_fraction'])
+    paper_stats['r_confidence_agreement'] = r_conf_agree
+    print(f"\n3. Correlation (confidence, agreement): r = {r_conf_agree:.3f}")
+
+    # Per-model breakdown
+    print("   Per-model breakdown:")
+    for model in sorted(agreement_df['model'].unique()):
+        model_data = agreement_df[agreement_df['model'] == model]
+        r_model = model_data['mean_confidence'].corr(model_data['agreement_fraction'])
+        model_short = model.split('.')[-1].split(':')[0]
+        paper_stats[f'r_conf_agree_{model_short}'] = r_model
+        print(f"     {model_short}: r = {r_model:.3f}")
+
+# 7.3 Predicted vote vs Actual vote correlation and MAE
+if len(pred_agreement_df) > 0:
+    r_pred_actual = pred_agreement_df['predicted_popularity'].corr(
+        pred_agreement_df['agreement_with_correct'])
+    mae_pred = (pred_agreement_df['predicted_popularity'] -
+                pred_agreement_df['agreement_with_correct']).abs().mean()
+    paper_stats['r_predicted_actual_vote'] = r_pred_actual
+    paper_stats['mae_predicted_actual'] = mae_pred
+    print(f"\n4. Correlation (predicted vote, actual vote): r = {r_pred_actual:.3f}")
+    print(f"5. MAE (predicted vs actual): {mae_pred:.3f}")
+
+    # Per-dataset breakdown
+    print("\n   Per-dataset breakdown:")
+    for dataset in sorted(pred_agreement_df['dataset'].unique()):
+        ds_data = pred_agreement_df[pred_agreement_df['dataset'] == dataset]
+        r_ds = ds_data['predicted_popularity'].corr(ds_data['agreement_with_correct'])
+        mae_ds = (ds_data['predicted_popularity'] - ds_data['agreement_with_correct']).abs().mean()
+        ds_short = dataset.split('/')[-1]
+        paper_stats[f'r_pred_actual_{ds_short}'] = r_ds
+        paper_stats[f'mae_pred_{ds_short}'] = mae_ds
+        print(f"     {ds_short}: r = {r_ds:.3f}, MAE = {mae_ds:.3f}")
+
+# 7.4 Verify SP majority selection behavior on HLE
+print("\n" + "="*60)
+print("SP MAJORITY SELECTION ANALYSIS")
+print("="*60)
+
+if len(spa_df) > 0:
+    # For each question, compare SP answer to majority answer
+    sp_majority_analysis = []
+
+    for (dataset, model, temp), d_group in direct_df.groupby(['config_dataset_name', 'config_model_id', 'config_temperature']):
+        if dataset != 'cais/hle':
+            continue
+
+        p_group = pred_df[(pred_df['config_dataset_name'] == dataset) &
+                          (pred_df['config_model_id'] == model) &
+                          (pred_df['config_temperature'] == temp)]
+
+        if len(p_group) == 0:
+            continue
+
+        common_questions = list(set(d_group['question'].unique()) & set(p_group['question'].unique()))
+
+        for q in common_questions:
+            q_direct = d_group[d_group['question'] == q]
+            q_pred = p_group[p_group['question'] == q]
+
+            # Get majority answer
+            answer_counts = q_direct['extracted_answer'].value_counts()
+            majority_answer = answer_counts.idxmax()
+
+            # Get SP answer
+            avg_direct = q_direct['answer_binary'].mean()
+            avg_pred_option1 = q_pred['pred_option1_conf'].mean() / 100.0
+            avg_pred_option2 = q_pred['pred_option2_conf'].mean() / 100.0
+
+            gap_option1 = avg_direct - avg_pred_option1
+            gap_option2 = (1 - avg_direct) - avg_pred_option2
+
+            sp_answer = 'yes' if gap_option1 > gap_option2 else 'no'
+
+            sp_majority_analysis.append({
+                'question': q,
+                'model': model,
+                'temperature': temp,
+                'majority_answer': majority_answer,
+                'sp_answer': sp_answer,
+                'sp_selects_majority': sp_answer == majority_answer,
+                'true_answer': q_direct['true_answer'].iloc[0],
+                'sp_correct': sp_answer == q_direct['true_answer'].iloc[0],
+                'majority_correct': majority_answer == q_direct['true_answer'].iloc[0]
+            })
+
+    sp_majority_df = pd.DataFrame(sp_majority_analysis)
+
+    if len(sp_majority_df) > 0:
+        sp_selects_majority_pct = sp_majority_df['sp_selects_majority'].mean() * 100
+        sp_correct_when_minority = sp_majority_df[~sp_majority_df['sp_selects_majority']]['sp_correct'].mean() * 100 if len(sp_majority_df[~sp_majority_df['sp_selects_majority']]) > 0 else 0
+        sp_correct_when_majority = sp_majority_df[sp_majority_df['sp_selects_majority']]['sp_correct'].mean() * 100 if len(sp_majority_df[sp_majority_df['sp_selects_majority']]) > 0 else 0
+
+        paper_stats['sp_selects_majority_pct_hle'] = sp_selects_majority_pct
+        paper_stats['sp_correct_when_minority_hle'] = sp_correct_when_minority
+        paper_stats['sp_correct_when_majority_hle'] = sp_correct_when_majority
+
+        print(f"\nHLE SP Majority Selection Analysis:")
+        print(f"  SP selects majority answer: {sp_selects_majority_pct:.1f}% of questions")
+        print(f"  SP selects minority answer: {100 - sp_selects_majority_pct:.1f}% of questions")
+        print(f"\n  When SP selects majority: {sp_correct_when_majority:.1f}% correct (n={len(sp_majority_df[sp_majority_df['sp_selects_majority']])})")
+        print(f"  When SP selects minority: {sp_correct_when_minority:.1f}% correct (n={len(sp_majority_df[~sp_majority_df['sp_selects_majority']])})")
+
+# 7.5 Save paper statistics to CSV
+paper_stats_df = pd.DataFrame([paper_stats])
+stats_filename = f"{results_dir}/paper_statistics.csv"
+paper_stats_df.to_csv(stats_filename, index=False)
+print(f"\nSaved paper statistics to: {stats_filename}")
+
+# Also save as formatted text for easy copying
+stats_txt_filename = f"{results_dir}/paper_statistics.txt"
+with open(stats_txt_filename, 'w') as f:
+    f.write("=" * 60 + "\n")
+    f.write("PAPER STATISTICS SUMMARY\n")
+    f.write("=" * 60 + "\n\n")
+
+    f.write("SECTION 5.2 - CONFIDENCE CALIBRATION\n")
+    f.write("-" * 40 + "\n")
+    if 'r_confidence_accuracy' in paper_stats:
+        f.write(f"Correlation (confidence, accuracy): r = {paper_stats['r_confidence_accuracy']:.3f}\n")
+    if 'accuracy_at_90plus_confidence' in paper_stats:
+        f.write(f"Accuracy at 90%+ confidence: {paper_stats['accuracy_at_90plus_confidence']:.1f}%\n")
+    if 'r_confidence_agreement' in paper_stats:
+        f.write(f"Correlation (confidence, agreement): r = {paper_stats['r_confidence_agreement']:.3f}\n")
+
+    f.write("\nSECTION 5.3 - SOCIAL PREDICTION\n")
+    f.write("-" * 40 + "\n")
+    if 'r_predicted_actual_vote' in paper_stats:
+        f.write(f"Correlation (predicted vote, actual vote): r = {paper_stats['r_predicted_actual_vote']:.3f}\n")
+    if 'mae_predicted_actual' in paper_stats:
+        f.write(f"MAE (predicted vs actual): {paper_stats['mae_predicted_actual']:.3f}\n")
+
+    f.write("\nSECTION 5.1 - SP MAJORITY SELECTION (HLE)\n")
+    f.write("-" * 40 + "\n")
+    if 'sp_selects_majority_pct_hle' in paper_stats:
+        f.write(f"SP selects majority answer: {paper_stats['sp_selects_majority_pct_hle']:.1f}%\n")
+        f.write(f"SP correct when selecting minority: {paper_stats.get('sp_correct_when_minority_hle', 'N/A')}%\n")
+        f.write(f"SP correct when selecting majority: {paper_stats.get('sp_correct_when_majority_hle', 'N/A')}%\n")
+
+    f.write("\n" + "=" * 60 + "\n")
+    f.write("FULL STATISTICS\n")
+    f.write("=" * 60 + "\n")
+    for key, value in sorted(paper_stats.items()):
+        if isinstance(value, float):
+            f.write(f"{key}: {value:.4f}\n")
+        else:
+            f.write(f"{key}: {value}\n")
+
+print(f"Saved formatted statistics to: {stats_txt_filename}")
+
+print("\n" + "="*60)
+print("ALL VISUALIZATIONS AND STATISTICS COMPLETE")
 print("="*60)
 print(f"All plots saved to: {results_dir}")
