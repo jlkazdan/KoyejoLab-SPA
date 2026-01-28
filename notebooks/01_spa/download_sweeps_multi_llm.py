@@ -485,7 +485,7 @@ def compute_ensemble_surprisingly_popular(df):
             true_answer = q_direct['true_answer'].iloc[0]
             
             if dataset == 'google/boolq':
-                true_answer = True if (true_answer == True or str(true_answer).lower() == 'true') else False
+                true_answer = 'true' if (true_answer is True or str(true_answer).lower() == 'true') else 'false'
             
             question_correct[q] = (sp_answer == true_answer)
         
@@ -506,6 +506,166 @@ def compute_ensemble_surprisingly_popular(df):
 ensemble_sp = compute_ensemble_surprisingly_popular(responses_df)
 if ensemble_sp is not None:
     print(ensemble_sp)
+
+
+# Compute Inverse Surprisingly Popular Answer - ENSEMBLE across all models
+print("\n" + "=" * 60)
+print("ENSEMBLE PROXY ISP (INVERSE SURPRISINGLY POPULAR)")
+print("=" * 60)
+
+def compute_ensemble_inverse_surprisingly_popular(df):
+    """Compute inverse surprisingly popular answer across ALL models using paired answer/prediction samples."""
+    # Only use SPA experiment data (needs predictions)
+    if 'config_experiment_type' in df.columns:
+        df = df[df['config_experiment_type'] == 'surprisingly_popular'].copy()
+    else:
+        df = df.copy()
+    
+    direct_df = df[df['response_type'] == 'direct_answer'].copy()
+    if len(direct_df) == 0:
+        print("No direct_answer data found")
+        return None
+    
+    pred_df = df[df['response_type'] == 'prediction'].copy()
+    if len(pred_df) == 0:
+        print("No prediction data found")
+        return None
+    
+    # Normalize direct answers
+    direct_df['extracted_answer'] = direct_df['extracted_answer'].apply(
+        lambda x: str(x).lower().strip() if pd.notna(x) else None
+    )
+    direct_df['true_answer'] = direct_df['true_answer'].apply(
+        lambda x: str(x).lower().strip() if pd.notna(x) else None
+    )
+    direct_df = direct_df.dropna(subset=['extracted_answer', 'true_answer'])
+    direct_df = direct_df[direct_df['extracted_answer'].isin(['yes', 'no', 'true', 'false'])]
+    
+    yes_no_datasets = {'cais/hle', 'kyssen/predict-the-futurebench-cutoff-June25'}
+    true_false_datasets = {'google/boolq', 'tasksource/com2sense'}
+    
+    # Extract predictions (support percent or probability formats)
+    def extract_predictions(row):
+        response = row.get('model_response')
+        if not isinstance(response, str) or response.strip() == "":
+            response = row.get('extracted_answer')
+        if not isinstance(response, str):
+            return None, None
+        
+        dataset = row.get('config_dataset_name')
+        if dataset in yes_no_datasets:
+            m1 = re.search(r'YES:?\s*([0-9]*\.?[0-9]+)', response, re.IGNORECASE)
+            m2 = re.search(r'NO:?\s*([0-9]*\.?[0-9]+)', response, re.IGNORECASE)
+        elif dataset in true_false_datasets:
+            m1 = re.search(r'TRUE:?\s*([0-9]*\.?[0-9]+)', response, re.IGNORECASE)
+            m2 = re.search(r'FALSE:?\s*([0-9]*\.?[0-9]+)', response, re.IGNORECASE)
+        else:
+            m1 = re.search(r'YES:?\s*([0-9]*\.?[0-9]+)', response, re.IGNORECASE)
+            m2 = re.search(r'NO:?\s*([0-9]*\.?[0-9]+)', response, re.IGNORECASE)
+            if not (m1 and m2):
+                m1 = re.search(r'TRUE:?\s*([0-9]*\.?[0-9]+)', response, re.IGNORECASE)
+                m2 = re.search(r'FALSE:?\s*([0-9]*\.?[0-9]+)', response, re.IGNORECASE)
+        
+        if not (m1 and m2):
+            return None, None
+        
+        v1 = float(m1.group(1))
+        v2 = float(m2.group(1))
+        if v1 + v2 > 2.0:  # likely percentages
+            v1 /= 100.0
+            v2 /= 100.0
+        
+        return v1, v2
+    
+    extracted_pred = pred_df.apply(extract_predictions, axis=1)
+    pred_df['pred_option1'] = extracted_pred.apply(lambda x: x[0])
+    pred_df['pred_option2'] = extracted_pred.apply(lambda x: x[1])
+    pred_df = pred_df.dropna(subset=['pred_option1', 'pred_option2'])
+    
+    # Pair direct answers with predictions by run/question/sample index
+    direct_df['question_idx'] = pd.to_numeric(direct_df['question_idx'], errors='coerce')
+    direct_df['response_idx'] = pd.to_numeric(direct_df['response_idx'], errors='coerce')
+    pred_df['question_idx'] = pd.to_numeric(pred_df['question_idx'], errors='coerce')
+    pred_df['response_idx'] = pd.to_numeric(pred_df['response_idx'], errors='coerce')
+    
+    direct_df = direct_df.dropna(subset=['run_id', 'question_idx', 'response_idx'])
+    pred_df = pred_df.dropna(subset=['run_id', 'question_idx', 'response_idx'])
+    
+    direct_df['question_idx'] = direct_df['question_idx'].astype(int)
+    direct_df['response_idx'] = direct_df['response_idx'].astype(int)
+    pred_df['question_idx'] = pred_df['question_idx'].astype(int)
+    pred_df['response_idx'] = pred_df['response_idx'].astype(int)
+    
+    paired = direct_df.merge(
+        pred_df[['run_id', 'question_idx', 'response_idx', 'pred_option1', 'pred_option2']],
+        on=['run_id', 'question_idx', 'response_idx'],
+        how='inner'
+    )
+    
+    results = []
+    for dataset in paired['config_dataset_name'].unique():
+        group = paired[paired['config_dataset_name'] == dataset]
+        if len(group) == 0:
+            continue
+        
+        option1 = 'yes' if dataset in yes_no_datasets else 'true'
+        option2 = 'no' if dataset in yes_no_datasets else 'false'
+        
+        questions = group['question'].unique()
+        question_correct = {}
+        for q in questions:
+            q_group = group[group['question'] == q]
+            
+            n1 = (q_group['extracted_answer'] == option1).sum()
+            n2 = (q_group['extracted_answer'] == option2).sum()
+            if n1 + n2 == 0:
+                continue
+            
+            overall_p1 = q_group['pred_option1'].mean()
+            overall_p2 = q_group['pred_option2'].mean()
+            
+            p1_given_1 = q_group[q_group['extracted_answer'] == option1]['pred_option1'].mean()
+            p1_given_2 = q_group[q_group['extracted_answer'] == option2]['pred_option1'].mean()
+            p2_given_1 = q_group[q_group['extracted_answer'] == option1]['pred_option2'].mean()
+            p2_given_2 = q_group[q_group['extracted_answer'] == option2]['pred_option2'].mean()
+            
+            if pd.isna(p1_given_1):
+                p1_given_1 = overall_p1
+            if pd.isna(p1_given_2):
+                p1_given_2 = overall_p1
+            if pd.isna(p2_given_1):
+                p2_given_1 = overall_p2
+            if pd.isna(p2_given_2):
+                p2_given_2 = overall_p2
+            
+            adv_opt1 = n1 - (n1 * p1_given_2 + n2 * p1_given_1)
+            adv_opt2 = n2 - (n1 * p2_given_2 + n2 * p2_given_1)
+            
+            isp_answer = option1 if adv_opt1 > adv_opt2 else option2
+            true_answer = q_group['true_answer'].iloc[0]
+            
+            if dataset == 'google/boolq':
+                true_answer = True if (true_answer == True or str(true_answer).lower() == 'true') else False
+            
+            question_correct[q] = (isp_answer == true_answer)
+        
+        correct_array = np.array([question_correct[q] for q in questions if q in question_correct])
+        
+        if len(correct_array) > 0:
+            mean_acc, lower_ci, upper_ci = bootstrap_accuracy(correct_array)
+            results.append({
+                'dataset': dataset,
+                'accuracy': mean_acc * 100,
+                'lower_ci': lower_ci * 100,
+                'upper_ci': upper_ci * 100,
+                'num_questions': len(correct_array)
+            })
+    
+    return pd.DataFrame(results)
+
+ensemble_isp = compute_ensemble_inverse_surprisingly_popular(responses_df)
+if ensemble_isp is not None:
+    print(ensemble_isp)
 
 
 # Create summary comparison
@@ -541,6 +701,11 @@ if ensemble_sp is not None and len(ensemble_sp) > 0:
     temp['method'] = 'Surp. Popular'
     all_ensemble_results.append(temp)
 
+if ensemble_isp is not None and len(ensemble_isp) > 0:
+    temp = ensemble_isp.copy()
+    temp['method'] = 'Proxy ISP'
+    all_ensemble_results.append(temp)
+
 if all_ensemble_results:
     ensemble_summary = pd.concat(all_ensemble_results, ignore_index=True)
     
@@ -556,7 +721,8 @@ if all_ensemble_results:
         'Highest Conf': '#9b59b6',
         'Conf Weighted': '#e74c3c', 
         'Pred Weighted': '#2ecc71',
-        'Surp. Popular': '#f39c12'
+        'Surp. Popular': '#f39c12',
+        'Proxy ISP': '#1abc9c'
     }
     
     # Create plot with larger figure
@@ -564,7 +730,7 @@ if all_ensemble_results:
     
     # Get unique datasets and methods
     datasets = sorted(list(set([str(d) for d in ensemble_summary['dataset'].unique()])))
-    methods = ['Direct Majority', 'Highest Conf', 'Conf Weighted', 'Pred Weighted', 'Surp. Popular']
+    methods = ['Direct Majority', 'Highest Conf', 'Conf Weighted', 'Pred Weighted', 'Surp. Popular', 'Proxy ISP']
     methods = [m for m in methods if m in ensemble_summary['method'].values]
     
     print(f"\nDatasets found: {datasets}")
