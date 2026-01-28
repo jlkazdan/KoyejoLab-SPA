@@ -522,6 +522,174 @@ if sp_result is not None:
     print("\n", sp_result)
 
 
+# Compute Inverse Surprisingly Popular Answer with bootstrapping
+print("\n" + "=" * 60, "\nPROXY ISP (INVERSE SURPRISINGLY POPULAR)\n", "=" * 60)
+
+def compute_inverse_surprisingly_popular(df):
+    """Compute inverse surprisingly popular answer (ISP) using paired answer/prediction samples."""
+
+    # Only use SPA experiment data (needs predictions)
+    df = df[df['config_experiment_type'] == 'surprisingly_popular'].copy()
+
+    direct_df = df[df['response_type'] == 'direct_answer'].copy()
+    if len(direct_df) == 0:
+        print("No direct_answer data found")
+        return None
+
+    pred_df = df[df['response_type'] == 'prediction'].copy()
+    if len(pred_df) == 0:
+        print("No prediction data found")
+        return None
+
+    # Normalize direct answers
+    direct_df['extracted_answer'] = direct_df['extracted_answer'].apply(
+        lambda x: str(x).lower().strip() if pd.notna(x) else None
+    )
+    direct_df['true_answer'] = direct_df['true_answer'].apply(
+        lambda x: str(x).lower().strip() if pd.notna(x) else None
+    )
+    direct_df = direct_df.dropna(subset=['extracted_answer', 'true_answer'])
+    direct_df = direct_df[direct_df['extracted_answer'].isin(['yes', 'no', 'true', 'false'])]
+
+    yes_no_datasets = {'cais/hle', 'kyssen/predict-the-futurebench-cutoff-June25'}
+    true_false_datasets = {'google/boolq', 'tasksource/com2sense'}
+
+    # Extract predictions (support percent or probability formats)
+    def extract_predictions(row):
+        response = row.get('model_response')
+        if not isinstance(response, str) or response.strip() == "":
+            response = row.get('extracted_answer')
+        if not isinstance(response, str):
+            return None, None
+
+        dataset = row.get('config_dataset_name')
+        if dataset in yes_no_datasets:
+            m1 = re.search(r'YES:?\s*([0-9]*\.?[0-9]+)', response, re.IGNORECASE)
+            m2 = re.search(r'NO:?\s*([0-9]*\.?[0-9]+)', response, re.IGNORECASE)
+        elif dataset in true_false_datasets:
+            m1 = re.search(r'TRUE:?\s*([0-9]*\.?[0-9]+)', response, re.IGNORECASE)
+            m2 = re.search(r'FALSE:?\s*([0-9]*\.?[0-9]+)', response, re.IGNORECASE)
+        else:
+            m1 = re.search(r'YES:?\s*([0-9]*\.?[0-9]+)', response, re.IGNORECASE)
+            m2 = re.search(r'NO:?\s*([0-9]*\.?[0-9]+)', response, re.IGNORECASE)
+            if not (m1 and m2):
+                m1 = re.search(r'TRUE:?\s*([0-9]*\.?[0-9]+)', response, re.IGNORECASE)
+                m2 = re.search(r'FALSE:?\s*([0-9]*\.?[0-9]+)', response, re.IGNORECASE)
+
+        if not (m1 and m2):
+            return None, None
+
+        v1 = float(m1.group(1))
+        v2 = float(m2.group(1))
+        if v1 + v2 > 2.0:  # likely percentages
+            v1 /= 100.0
+            v2 /= 100.0
+
+        return v1, v2
+
+    extracted_pred = pred_df.apply(extract_predictions, axis=1)
+    pred_df['pred_option1'] = extracted_pred.apply(lambda x: x[0])
+    pred_df['pred_option2'] = extracted_pred.apply(lambda x: x[1])
+    pred_df = pred_df.dropna(subset=['pred_option1', 'pred_option2'])
+
+    # Pair direct answers with predictions by run/question/sample index
+    key_cols = ['run_id', 'question_idx', 'response_idx']
+    # run_id is a string; only coerce numeric indices
+    direct_df['question_idx'] = pd.to_numeric(direct_df['question_idx'], errors='coerce')
+    direct_df['response_idx'] = pd.to_numeric(direct_df['response_idx'], errors='coerce')
+    pred_df['question_idx'] = pd.to_numeric(pred_df['question_idx'], errors='coerce')
+    pred_df['response_idx'] = pd.to_numeric(pred_df['response_idx'], errors='coerce')
+
+    direct_df = direct_df.dropna(subset=key_cols)
+    pred_df = pred_df.dropna(subset=key_cols)
+
+    direct_df['question_idx'] = direct_df['question_idx'].astype(int)
+    direct_df['response_idx'] = direct_df['response_idx'].astype(int)
+    pred_df['question_idx'] = pred_df['question_idx'].astype(int)
+    pred_df['response_idx'] = pred_df['response_idx'].astype(int)
+
+    # Pair by response_idx to approximate per-agent answer + prediction linkage
+    paired = direct_df.merge(
+        pred_df[key_cols + ['pred_option1', 'pred_option2']],
+        on=key_cols,
+        how='inner'
+    )
+
+    results = []
+    for (dataset, model, temp), group in paired.groupby(['config_dataset_name', 'config_model_id', 'config_temperature']):
+        if len(group) == 0:
+            continue
+
+        option1 = 'yes' if dataset in yes_no_datasets else 'true'
+        option2 = 'no' if dataset in yes_no_datasets else 'false'
+
+        common_questions = group['question'].unique()
+        if len(common_questions) == 0:
+            continue
+
+        question_correct = {}
+        for q in common_questions:
+            q_group = group[group['question'] == q]
+
+            n1 = (q_group['extracted_answer'] == option1).sum()
+            n2 = (q_group['extracted_answer'] == option2).sum()
+            if n1 + n2 == 0:
+                continue
+
+            overall_p1 = q_group['pred_option1'].mean()
+            overall_p2 = q_group['pred_option2'].mean()
+
+            p1_given_1 = q_group[q_group['extracted_answer'] == option1]['pred_option1'].mean()
+            p1_given_2 = q_group[q_group['extracted_answer'] == option2]['pred_option1'].mean()
+            p2_given_1 = q_group[q_group['extracted_answer'] == option1]['pred_option2'].mean()
+            p2_given_2 = q_group[q_group['extracted_answer'] == option2]['pred_option2'].mean()
+
+            if pd.isna(p1_given_1):
+                p1_given_1 = overall_p1
+            if pd.isna(p1_given_2):
+                p1_given_2 = overall_p1
+            if pd.isna(p2_given_1):
+                p2_given_1 = overall_p2
+            if pd.isna(p2_given_2):
+                p2_given_2 = overall_p2
+
+            # ISP advantage for binary case (K=2)
+            adv_opt1 = n1 - (n1 * p1_given_2 + n2 * p1_given_1)
+            adv_opt2 = n2 - (n1 * p2_given_2 + n2 * p2_given_1)
+
+            isp_answer = option1 if adv_opt1 > adv_opt2 else option2
+            true_answer = q_group['true_answer'].iloc[0]
+            question_correct[q] = (isp_answer == true_answer)
+
+        correct_array = np.array([question_correct[q] for q in common_questions if q in question_correct])
+        if len(correct_array) == 0:
+            continue
+
+        bootstrap_indices = np.random.randint(0, len(correct_array), size=(N_BOOTSTRAP, len(correct_array)))
+        bootstrap_samples = correct_array[bootstrap_indices]
+        bootstrap_accs = bootstrap_samples.mean(axis=1)
+
+        mean_acc = bootstrap_accs.mean()
+        alpha = 1 - CONFIDENCE_LEVEL
+        lower_ci = np.percentile(bootstrap_accs, 100 * alpha / 2)
+        upper_ci = np.percentile(bootstrap_accs, 100 * (1 - alpha / 2))
+
+        results.append({
+            'dataset': dataset,
+            'model': model,
+            'temperature': temp,
+            'accuracy': mean_acc * 100,
+            'lower_ci': lower_ci * 100,
+            'upper_ci': upper_ci * 100
+        })
+
+    return pd.DataFrame(results)
+
+isp_result = compute_inverse_surprisingly_popular(responses_df)
+if isp_result is not None:
+    print("\n", isp_result)
+
+
 # Create visualizations with seaborn
 print("\n" + "=" * 60, "\nCREATING VISUALIZATIONS\n", "=" * 60)
 
@@ -550,11 +718,18 @@ def prepare_visualization_data():
     
     sp_results = sp_result[['dataset', 'model', 'temperature', 'accuracy', 'lower_ci', 'upper_ci']].copy()
     sp_results['method'] = 'Surp. Popular'
-    
-    all_results = pd.concat([
-        individual_results, direct_results, highest_conf_results, 
+
+    results_list = [
+        individual_results, direct_results, highest_conf_results,
         conf_results, pred_results, sp_results
-    ], ignore_index=True)
+    ]
+
+    if isp_result is not None and len(isp_result) > 0:
+        isp_results = isp_result[['dataset', 'model', 'temperature', 'accuracy', 'lower_ci', 'upper_ci']].copy()
+        isp_results['method'] = 'Proxy ISP'
+        results_list.append(isp_results)
+    
+    all_results = pd.concat(results_list, ignore_index=True)
     
     # Calculate error bars
     all_results['error_lower'] = all_results['accuracy'] - all_results['lower_ci']
@@ -571,10 +746,13 @@ palette = {
     'Highest Conf': '#9b59b6',
     'Conf Weighted': '#e74c3c', 
     'Pred Weighted': '#2ecc71',
-    'Surp. Popular': '#f39c12'
+    'Surp. Popular': '#f39c12',
+    'Proxy ISP': '#1abc9c'
 }
 
 methods = ['Individual Avg', 'Direct Majority', 'Highest Conf', 'Conf Weighted', 'Pred Weighted', 'Surp. Popular']
+if isp_result is not None and len(isp_result) > 0:
+    methods.append('Proxy ISP')
 datasets = viz_data['dataset'].unique()
 
 # Create plots for each dataset
