@@ -1,0 +1,20 @@
+Benchmark,Model,Flip Rate,N
+BoolQ,GPT-OSS-120B,2.0,100
+BoolQ,GPT-OSS-20B,9.0,100
+BoolQ,Gemma-3-4B,1.0,100
+BoolQ,Qwen3-235B,1.0,100
+BoolQ,Qwen3-32B,3.0,100
+Com2Sense,GPT-OSS-120B,2.0,100
+Com2Sense,GPT-OSS-20B,2.0,100
+Com2Sense,Qwen3-235B,1.0,100
+Com2Sense,Qwen3-32B,1.0,100
+HLE,GPT-OSS-120B,2.857142857142857,35
+HLE,GPT-OSS-20B,5.714285714285714,35
+HLE,Gemma-3-4B,0.0,35
+HLE,Qwen3-235B,2.857142857142857,35
+HLE,Qwen3-32B,0.0,35
+Predict-the-Future,GPT-OSS-120B,8.0,100
+Predict-the-Future,GPT-OSS-20B,9.0,100
+Predict-the-Future,Gemma-3-4B,0.0,100
+Predict-the-Future,Qwen3-235B,1.0,100
+Predict-the-Future,Qwen3-32B,1.0,100

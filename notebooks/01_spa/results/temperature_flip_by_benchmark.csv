@@ -1,0 +1,5 @@
+Benchmark,Flip Rate,N Comparisons,N Questions,N Models
+Predict-the-Future,3.8,500,100,5
+BoolQ,3.2,500,100,5
+HLE,2.2857142857142856,175,35,5
+Com2Sense,1.5,400,100,4
